@@ -1,0 +1,284 @@
+import tkinter as tk
+from tkinter import messagebox
+import customtkinter as ctk
+import webbrowser
+import geocoder
+import threading
+from twilio.rest import Client
+from PIL import Image, ImageTk
+import os
+import io
+from urllib.request import urlopen
+
+emergency_contacts = {
+    "IN": "100"  # Emergency number for India
+}
+
+# Twilio credentials (Replace with your Twilio account details)
+TWILIO_SID = ''
+TWILIO_AUTH_TOKEN = ''
+TWILIO_PHONE_NUMBER = ''
+
+def get_location():
+    g = geocoder.ip('me')
+    return g if g.latlng else "Location unavailable"
+
+# Function to send emergency SMS
+def send_emergency_sms():
+    location = get_location()
+    emergency_contacts_list = ["+999", ]  # Add SOS and user contacts here
+    
+    message_body = f"I need help! My current location: {location.city}, {location.state}, {location.country}, and my coordinates are {location.latlng[0]} NORTH and {location.latlng[1]} EAST"
+    
+    client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+    
+    for contact in emergency_contacts_list:
+        try:
+            client.messages.create(
+                body=message_body,
+                from_=TWILIO_PHONE_NUMBER,
+                to=contact
+            )
+            messagebox.showinfo("Success", f"Emergency SMS sent to {contact}")
+        except Exception as e:
+            print(1)
+            messagebox.showerror("Error", f"Failed to send SMS to {contact}: {e}")
+
+# Function to open Google Maps with the user's location
+def open_google_maps():
+    location = get_location()
+    if location != "Location unavailable":
+        webbrowser.open(f"https://www.google.com/maps?q={location.latlng[0]},{location.latlng[1]}")
+    else:
+        print(1)
+        messagebox.showerror("Error", "Unable to retrieve location")
+
+# Function to simulate emergency call
+def emergency_call():
+    send_emergency_sms()
+    client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+    location = get_location()
+    emergency_number = emergency_contacts.get(location.country)
+    print(emergency_number)
+    client.calls.create(
+        twiml=f"<Response><Say>Emergency! Please help me! My current location is{location.city}, {location.state}, {location.country}, and my coordinates are {location.latlng[0]} NORTH and {location.latlng[1]} EAST</Say></Response>",
+        to=emergency_number,
+        from_=TWILIO_PHONE_NUMBER
+    )
+    messagebox.showinfo("Calling", "Calling local emergency number")
+
+# Function to open emergency guidance links
+def open_guidance(link):
+    webbrowser.open(link)
+
+# Function to show/hide the learning section
+def toggle_learn_section():
+    if learn_frame.winfo_viewable():
+        learn_frame.pack_forget()
+    else:
+        learn_frame.pack(pady=10, padx=20, fill="x")
+
+# Create a separate welcome window for name input
+def show_welcome_window():
+    welcome_window = ctk.CTkToplevel()
+    welcome_window.title("Welcome to Najda")
+    welcome_window.geometry("300x200")
+    welcome_window.configure(fg_color="#f0f8ff")
+    welcome_window.lift()
+    
+    welcome_label = ctk.CTkLabel(welcome_window, text="Welcome to Najda", font=("Arial", 18, "bold"), text_color="#003366")
+    welcome_label.pack(pady=15)
+    
+    name_label = ctk.CTkLabel(welcome_window, text="Please enter your name:", font=("Arial", 14), text_color="#003366")
+    name_label.pack(pady=5)
+    
+    name_entry = ctk.CTkEntry(welcome_window, width=200)
+    name_entry.pack(pady=10)
+    
+    def save_name_and_close():
+        user_name = name_entry.get()
+        if user_name.strip() == "":
+            user_name = "User"
+        greeting_label.configure(text=f"Hello, {user_name}")
+        welcome_window.destroy()
+        root.deiconify()  # Show the main window
+    
+    submit_button = ctk.CTkButton(
+        welcome_window, 
+        text="Submit", 
+        font=("Arial", 14), 
+        fg_color="#007BFF", 
+        hover_color="#0056b3",
+        corner_radius=10,
+        command=save_name_and_close
+    )
+    submit_button.pack(pady=15)
+    
+    return welcome_window
+
+# Main GUI Setup
+root = ctk.CTk()
+root.title("Najda - Emergency Response App")
+root.geometry("400x750")
+root.configure(fg_color="#f0f8ff")  # Light sky blue background
+root.withdraw()  # Hide main window initially
+
+# Header frame
+header_frame = ctk.CTkFrame(root, fg_color="#C7DBEA", height=50)
+header_frame.pack(fill="x", pady=0)
+
+# App title
+app_title = ctk.CTkLabel(header_frame, text="Najda", font=("Arial", 24, "bold"), text_color="black")
+app_title.pack(pady=10)
+
+# User profile and greeting frame
+profile_frame = ctk.CTkFrame(root, fg_color="transparent")
+profile_frame.pack(fill="x", pady=10, padx=20)
+
+# Create oval frame for profile image 
+profile_image_frame = ctk.CTkFrame(profile_frame, width=60, height=60, corner_radius=30, fg_color="#CCCCCC")
+profile_image_frame.pack(side="left", padx=10)
+
+# Add profile icon
+profile_icon = ctk.CTkLabel(profile_image_frame, text="", width=40, height=40)
+profile_icon.place(relx=0.5, rely=0.5, anchor="center")
+
+# Try to add a user icon to the profile
+try:
+    # Create a simple user icon
+    user_icon_label = ctk.CTkLabel(profile_image_frame, text="👤", font=("Arial", 24), text_color="white")
+    user_icon_label.place(relx=0.5, rely=0.5, anchor="center")
+except Exception as e:
+    print(f"Failed to load profile icon: {e}")
+
+# Greeting label
+greeting_label = ctk.CTkLabel(profile_frame, text="Hello, _____", font=("Arial", 16), text_color="#333333")
+greeting_label.pack(side="left", padx=10, pady=10)
+
+# Heartbeat icon on the right
+heartbeat_frame = ctk.CTkFrame(profile_frame, width=60, height=60, corner_radius=30, fg_color="white", border_width=1, border_color="#CCCCCC")
+heartbeat_frame.pack(side="right", padx=10)
+
+# Add heartbeat text/symbol
+heartbeat_icon = ctk.CTkLabel(heartbeat_frame, text="❤️", font=("Arial", 18), text_color="#FF5252")
+heartbeat_icon.place(relx=0.5, rely=0.5, anchor="center")
+
+# Main content frame
+content_frame = ctk.CTkFrame(root, fg_color="transparent")
+content_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+# SOS Button with rounded corners - large and centered
+sos_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+sos_frame.pack(pady=2, fill="x")
+
+sos_button = ctk.CTkButton(
+    sos_frame,  
+    text="SOS",
+    font=("Arial", 36, "bold"), 
+    fg_color="#FF5252", 
+    height=180,  
+    text_color="black",  
+    width=180,  
+    border_width=2,
+    border_color="black",
+    corner_radius=90,  
+    hover_color="#FF3030",  
+    command=emergency_call
+)
+sos_button.pack(pady=20, anchor="center")
+
+# Lower buttons frame - arranged in a 2x2 grid
+lower_buttons_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+lower_buttons_frame.pack(fill="x", pady=10)
+
+# Create a frame for the map preview
+map_preview_frame = ctk.CTkFrame(lower_buttons_frame, width=150, height=80, corner_radius=20, fg_color="#B2EBF2")
+map_preview_frame.grid(row=0, column=0, padx=10, pady=10)
+
+# Map icon or preview (placeholder)
+map_label = ctk.CTkLabel(map_preview_frame, text="🗺️", font=("Arial", 40), text_color="#333333")
+map_label.place(relx=0.5, rely=0.5, anchor="center")
+
+# Send SMS button
+sms_button = ctk.CTkButton(
+    lower_buttons_frame,
+    text="Send Emergency\nSMS",
+    font=("Arial", 14),
+    fg_color="#B2EBF2",
+    text_color="black",
+    hover_color="#80DEEA",
+    corner_radius=20,
+    height=80,
+    width=150,
+    command=lambda: threading.Thread(target=send_emergency_sms).start()
+)
+sms_button.grid(row=0, column=1, padx=10, pady=10)
+
+# View Location button
+location_button = ctk.CTkButton(
+    lower_buttons_frame,
+    text="View Location",
+    font=("Arial", 14),
+    fg_color="#B2EBF2",
+    text_color="black",
+    hover_color="#80DEEA",
+    corner_radius=20,
+    height=80,
+    width=150,
+    command=open_google_maps
+)
+location_button.grid(row=1, column=0, padx=10, pady=10)
+
+# Learn button
+learn_button = ctk.CTkButton(
+    lower_buttons_frame,
+    text="Learn",
+    font=("Arial", 14),
+    fg_color="#B2EBF2",
+    text_color="black",
+    hover_color="#80DEEA",
+    corner_radius=20,
+    height=80,
+    width=150,
+    command=toggle_learn_section
+)
+learn_button.grid(row=1, column=1, padx=10, pady=10)
+
+# Learning section frame (hidden by default)
+learn_frame = ctk.CTkFrame(root, fg_color="#E0F7FA", corner_radius=15)
+# Not packed initially - will be shown on Learn button click
+
+# Learning section title
+learn_title = ctk.CTkLabel(learn_frame, text="Courses:", font=("Arial", 16, "bold"), text_color="#003366")
+learn_title.pack(pady=1)
+
+# Health Information button
+health_info_button = ctk.CTkButton(
+    learn_frame,
+    text="Health Information",
+    font=("Arial", 12),
+    fg_color="#80DEEA",
+    text_color="black",
+    hover_color="#4DD0E1",
+    corner_radius=15,
+    command=lambda: open_guidance("https://www.nih.gov/health-information")
+)
+health_info_button.pack(pady=5, padx=20, fill="x")
+
+# First Aid Tutorials button
+first_aid_button = ctk.CTkButton(
+    learn_frame,
+    text="First AID Tutorials",
+    font=("Arial", 12),
+    fg_color="#80DEEA",
+    text_color="black",
+    hover_color="#4DD0E1",
+    corner_radius=15,
+    command=lambda: open_guidance("https://cpr.heart.org/en/")
+)
+first_aid_button.pack(pady=5, padx=20, fill="x")
+
+# Show welcome window when app starts
+welcome_window = show_welcome_window()
+
+root.mainloop()
